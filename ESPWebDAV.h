@@ -42,6 +42,7 @@
 #define WEBDAV_LOCK_SUPPORT 2
 
 //#define DBG_WEBDAV 1
+//#define DEBUG_ESP_PORT Serial
 
 #if CORE_MOCK && !defined(DBG_WEBDAV)
 #define DBG_WEBDAV 1
@@ -76,7 +77,14 @@
 #include <map>
 #endif
 #include <functional>
+#if defined(ARDUINO_ARCH_ESP8266)
 #include <ESP8266WiFi.h>
+#endif //ARDUINO_ARCH_ESP8266
+#if defined(ARDUINO_ARCH_ESP32)
+#include <WiFi.h>
+#include <FS.h>
+#define Dir File
+#endif //ARDUINO_ARCH_ESP32
 #include <StreamString.h>
 
 class ESPWebDAVCore
@@ -92,12 +100,17 @@ public:
     void begin(FS* gfs)
     {
         this->gfs = gfs;
-
+#if defined(ARDUINO_ARCH_ESP8266)
         fs::FSInfo64 info;
         if (gfs->info64(info))
             _maxPathLength = info.maxPathLength;
         else
             _maxPathLength = 16;
+#endif //ARDUINO_ARCH_ESP8266
+#if defined(ARDUINO_ARCH_ESP32)
+        _maxPathLength = 32;
+#endif //ARDUINO_ARCH_ESP32
+
     }
 
     bool dirAction(

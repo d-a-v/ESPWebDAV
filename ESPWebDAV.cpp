@@ -27,11 +27,36 @@
 
 */
 
-#include <ESP8266WiFi.h>
 #include <FS.h>
-#include <time.h>
+#if defined(ARDUINO_ARCH_ESP8266)
+#include <ESP8266WiFi.h>
 #include <coredecls.h> // crc32()
 #include <PolledTimeout.h>
+#define FILENAME(f) f.fileName().c_str()
+#define FILEFULLNAME(f) f.fullName()
+#define FILESIZE(f) f.fileSize()
+#define FILETIME(f) f.fileTime()
+#define GETCREATIONTIME(f) f.getCreationTime()
+#define FILECREATIONTIME(f) f.fileCreationTime()
+#define ISFILE(f) f.isFile()
+#endif //ARDUINO_ARCH_ESP8266
+#if defined(ARDUINO_ARCH_ESP32)
+#include <WiFi.h>
+#include "crc32.h"
+#include "PolledTimeout.h"
+#define FILENAME(f) f.name()
+#define FILEFULLNAME(f) f.name()
+#define FILESIZE(f) f.size()
+#define FILETIME(f) f.getLastWrite()
+#define GETCREATIONTIME(f) f.getLastWrite()
+#define FILECREATIONTIME(f) f.getLastWrite()
+#define ISFILE(f) !f.isDirectory()
+extern uint64_t TotalBytes();
+extern uint64_t UsedBytes();
+#endif //ARDUINO_ARCH_ESP32
+
+#include <time.h>
+
 
 #include <ESPWebDAV.h>
 
@@ -211,13 +236,13 @@ void ESPWebDAVCore::dir(const String& path, Print* out)
         for (int i = 0; i < depth; i++)
             out->print("    ");
         if (entry.isDirectory())
-            out->printf("[%s]\n", entry.fileName().c_str());
+            out->printf("[%s]\n", FILENAME(entry));
         else
             out->printf("%-40s%4dMiB %6dKiB %d\n",
-                        entry.fileName().c_str(),
-                        ((int)entry.fileSize() + (1 << 19)) >> 20,
-                        ((int)entry.fileSize() + (1 <<  9)) >> 10,
-                        (int)entry.fileSize());
+                        FILENAME(entry),
+                        ((int)FILESIZE(entry) + (1 << 19)) >> 20,
+                        ((int)FILESIZE(entry) + (1 <<  9)) >> 10,
+                        (int)FILESIZE(entry));
         return true;
     }, /*false=subdir first*/false);
 }
@@ -227,7 +252,13 @@ size_t ESPWebDAVCore::makeVirtual(virt_e v, String& internal)
 {
     if (v == VIRT_PROC)
     {
+#if defined(ARDUINO_ARCH_ESP8266)
         internal = ESP.getFullVersion();
+#endif //ARDUINO_ARCH_ESP8266
+#if defined(ARDUINO_ARCH_ESP32)
+        internal = "SDK:";
+        internal += ESP.getSdkVersion();
+#endif //ARDUINO_ARCH_ESP32
         internal += '\n';
     }
     return internal.length();
@@ -252,7 +283,13 @@ bool ESPWebDAVCore::getPayload(StreamString& payload)
     if (contentLengthHeader > 0)
     {
         payload.reserve(contentLengthHeader);
+#if defined(ARDUINO_ARCH_ESP8266)
         esp8266::polledTimeout::oneShotFastMs timeout(HTTP_MAX_POST_WAIT);
+#endif //ARDUINO_ARCH_ESP8266
+#if defined(ARDUINO_ARCH_ESP32)
+        PolledTimeout timeout(HTTP_MAX_POST_WAIT);
+#endif //ARDUINO_ARCH_ESP32
+       
         while (payload.length() < (size_t)contentLengthHeader)
         {
             uint8_t buf[16];
@@ -284,12 +321,19 @@ bool ESPWebDAVCore::dirAction(const String& path,
                               int depth)
 {
     //DBG_PRINTF("diraction: scanning dir '%s'\n", path.c_str());
+#if defined(ARDUINO_ARCH_ESP8266)
     Dir entry = gfs->openDir(path);
-
-    while (entry.next())
+    while (entry.next()) 
+#endif //ARDUINO_ARCH_ESP8266
+#if defined(ARDUINO_ARCH_ESP32)
+    File root = gfs->open(path);
+    File entry = root.openNextFile();
+    while(entry)
+#endif //ARDUINO_ARCH_ESP32
+        {
         if (!entry.isDirectory())
         {
-            //DBG_PRINTF("diraction: %s/%s (%d B): ", path.c_str(), entry.fileName().c_str(), (int)entry.fileSize());
+            //DBG_PRINTF("diraction: %s/%s (%d B): ", path.c_str(), FILENAME(entry), (int)entry.fileSize());
             if (cb(depth, path, entry))
             {
                 //DBG_PRINTF("(file-OK)\n");
@@ -300,16 +344,27 @@ bool ESPWebDAVCore::dirAction(const String& path,
                 return false;
             }
         }
-
+#if defined(ARDUINO_ARCH_ESP32)
+        entry = root.openNextFile();
+#endif //ARDUINO_ARCH_ESP32
+    }
     if (recursive)
     {
+#if defined(ARDUINO_ARCH_ESP32)
+        root = gfs->open(path);
+        entry = root.openNextFile();
+        while(entry)
+#endif //ARDUINO_ARCH_ESP32
+#if defined(ARDUINO_ARCH_ESP8266)
         entry = gfs->openDir(path);
         while (entry.next())
+#endif //ARDUINO_ARCH_ESP8266
+            {
             if (entry.isDirectory())
             {
-                //DBG_PRINTF("diraction: -------- %s/%s/\n", path.c_str(), entry.fileName().c_str());
+                //DBG_PRINTF("diraction: -------- %s/%s/\n", path.c_str(), FILENAME(entry));
                 if ((callAfter || cb(depth, path, entry))
-                        && dirAction(path + '/' + entry.fileName(), recursive, cb, callAfter, depth + 1)
+                        && dirAction(path + '/' + FILENAME(entry), recursive, cb, callAfter, depth + 1)
                         && (!callAfter || cb(depth, path, entry)))
                 {
                     //DBG_PRINTF("(dir-OK)\n");
@@ -320,6 +375,10 @@ bool ESPWebDAVCore::dirAction(const String& path,
                     return false;
                 }
             }
+#if defined(ARDUINO_ARCH_ESP32)
+                entry = root.openNextFile();
+#endif //ARDUINO_ARCH_ESP32
+        }
     }
 
     return true;
@@ -367,17 +426,20 @@ void ESPWebDAVCore::handleRequest()
             depth = DEPTH_ALL;
         DBG_PRINT("Depth: "); DBG_PRINTLN(depth);
     }
-
-    // does uri refer to a file or directory or a null?
-    File file = gfs->open(uri, "r");
-    if (file)
-    {
-        resource = file.isDirectory() ? RESOURCE_DIR : RESOURCE_FILE;
-        DBG_PRINTF("resource: '%s' is %s\n", uri.c_str(), resource == RESOURCE_DIR ? "dir" : "file");
+    File file;
+    if (gfs->exists(uri) || (uri=="/")){
+        // does uri refer to a file or directory or a null?
+        file = gfs->open(uri, "r");
+        if (file)
+        {
+            resource = file.isDirectory() ? RESOURCE_DIR : RESOURCE_FILE;
+            DBG_PRINTF("resource: '%s' is %s\n", uri.c_str(), resource == RESOURCE_DIR ? "dir" : "file");
+        }
+        else
+            DBG_PRINTF("resource: '%s': no file nor dir\n", uri.c_str());
+    } else {
+       DBG_PRINTF("resource: '%s': not exists\n", uri.c_str()); 
     }
-    else
-        DBG_PRINTF("resource: '%s': no file nor dir\n", uri.c_str());
-
 
     DBG_PRINT("\r\nm: "); DBG_PRINT(method);
     DBG_PRINT(" r: "); DBG_PRINT(resource);
@@ -635,10 +697,10 @@ void ESPWebDAVCore::handleProp(ResourceType resource, File& file)
         // virtual file
         sendPropResponse(false, uri.c_str(), 1024, time(nullptr), 0);
     }
-    else if (file.isFile() || depth == DEPTH_NONE)
+    else if (ISFILE(file) || depth == DEPTH_NONE)
     {
         DBG_PRINTF("----- PROP FILE '%s':\n", uri.c_str());
-        sendPropResponse(file.isDirectory(), uri.c_str(), file.size(), file.getLastWrite(), file.getCreationTime());
+        sendPropResponse(file.isDirectory(), uri.c_str(), file.size(), file.getLastWrite(), GETCREATIONTIME(file));
     }
     else
     {
@@ -650,30 +712,51 @@ void ESPWebDAVCore::handleProp(ResourceType resource, File& file)
             ///XXX fixme: more generic way to list virtual file list
             sendPropResponse(false, PROC, 1024, time(nullptr), 0);
         }
-
+#if defined(ARDUINO_ARCH_ESP32)
+        File root = gfs->open(uri);
+        File entry = root.openNextFile();
+        while(entry)
+#endif //ARDUINO_ARCH_ESP32
+#if defined(ARDUINO_ARCH_ESP8266)
         Dir entry = gfs->openDir(uri);
-        while (entry.next())
+        while (entry.next()) 
+#endif //ARDUINO_ARCH_ESP8266
         {
             yield();
             String path;
-            path.reserve(uri.length() + 1 + entry.fileName().length());
+            path.reserve(uri.length() + 1 + strlen(FILENAME(entry)));
             path += uri;
             path += '/';
-            path += entry.fileName();
+            path += FILENAME(entry);
             stripSlashes(path);
-            sendPropResponse(entry.isDirectory(), path.c_str(), entry.fileSize(), entry.fileTime(), entry.fileCreationTime());
+            sendPropResponse(entry.isDirectory(), path.c_str(), FILESIZE(entry), FILETIME(entry), FILECREATIONTIME(entry));
+#if defined(ARDUINO_ARCH_ESP32)
+            entry = root.openNextFile();
+#endif //ARDUINO_ARCH_ESP32
         }
     }
 
     if (payload.indexOf(F("quota-available-bytes")) >= 0 ||
             payload.indexOf(F("quota-used-bytes")) >= 0)
     {
+#if defined(ARDUINO_ARCH_ESP8266)
         fs::FSInfo64 info;
         if (gfs->info64(info))
         {
             sendContentProp(F("quota-available-bytes"), String(1.0 * (info.totalBytes - info.usedBytes), 0));
             sendContentProp(F("quota-used-bytes"), String(1.0 * info.usedBytes, 0));
         }
+#endif //ARDUINO_ARCH_ESP8266
+#if defined(ARDUINO_ARCH_ESP32)
+        //NEED TO BE not related to SPIFFS
+        //use external functions 
+        //but SPIFFS/FAT size_t because in MB
+        //and SD uint64_t because in GB
+        //so use uint64_t
+        sendContentProp(F("quota-available-bytes"), String(1.0 * (TotalBytes() - UsedBytes()), 0));
+        sendContentProp(F("quota-used-bytes"), String(1.0 * UsedBytes(), 0));
+#endif //ARDUINO_ARCH_ESP32
+        
     }
 
     sendContent(F("</D:multistatus>"));
@@ -883,8 +966,18 @@ void ESPWebDAVCore::handlePut(ResourceType resource)
     File file;
     stripName(uri);
     DBG_PRINTF("create file '%s'\n", uri.c_str());
+#if defined(ARDUINO_ARCH_ESP8266)
     if (!(file = gfs->open(uri, "w")))
+#endif //ARDUINO_ARCH_ESP8266
+#if defined(ARDUINO_ARCH_ESP32)
+    String s = uri;
+    if (uri[0]!='/')s = "/" + uri;
+    DBG_PRINTF("Create file %s\n", s.c_str());
+    if (!(file = gfs->open(s, "w")))
+#endif //ARDUINO_ARCH_ESP32
+        {
         return handleWriteError("Unable to create a new file", file);
+        }
 
     // file is created/open for writing at this point
     // did server send any data in put
@@ -1033,7 +1126,7 @@ void ESPWebDAVCore::handleMove(ResourceType resource, File& src)
         return handleIssue(code, "Locked");
 
     File destFile = gfs->open(dest, "r");
-    if (destFile && !destFile.isFile())
+    if (destFile && !ISFILE(destFile))
     {
         dest += '/';
         dest += src.name();
@@ -1100,10 +1193,10 @@ bool ESPWebDAVCore::deleteDir(const String& dir)
     {
         (void)depth;
         String toRemove;
-        toRemove.reserve(parent.length() + entry.fileName().length() + 2);
+        toRemove.reserve(parent.length() + strlen(FILENAME(entry)) + 2);
         toRemove += parent;
         toRemove += '/';
-        toRemove += entry.fileName();
+        toRemove += FILENAME(entry);
         bool ok = !!(entry.isDirectory() ? gfs->rmdir(toRemove) : gfs->remove(toRemove));
         DBG_PRINTF("DELETE %s %s: %s\n", entry.isDirectory() ? "[ dir]" : "[file]", toRemove.c_str(), ok ? "ok" : "bad");
         return ok;
@@ -1170,9 +1263,17 @@ bool ESPWebDAVCore::copyFile(File srcFile, const String& destName)
             return false;
         }
     }
+#if defined(ARDUINO_ARCH_ESP8266)
     dest = gfs->open(destName, "w");
+#endif //ARDUINO_ARCH_ESP8266
+#if defined(ARDUINO_ARCH_ESP32)
+    String s = destName;
+     if (destName[0]!='/')s = "/" + destName;
+     dest = gfs->open(s, "w");
+     DBG_PRINTF("Create file %s\n", s.c_str());
+#endif //ARDUINO_ARCH_ESP32
     if (!dest)
-    {
+    {   
         handleIssue(413, "Request Entity Too Large");
         return false;
     }
@@ -1188,7 +1289,7 @@ bool ESPWebDAVCore::copyFile(File srcFile, const String& destName)
             handleIssue(500, "Internal Server Error");
             return false;
         }
-        int wr = dest.write(cp, nb);
+        int wr = dest.write((const uint8_t*)cp, nb);
         if (wr != nb)
         {
             DBG_PRINTF("copy: short write wr=%d != rd=%d\n", (int)wr, (int)nb);
@@ -1240,7 +1341,7 @@ void ESPWebDAVCore::handleCopy(ResourceType resource, File& src)
     }
 
     DBG_PRINTF("copy: src='%s'=>'%s' dest='%s'=>'%s' parent:'%s'\n",
-               uri.c_str(), src.fullName(),
+               uri.c_str(), FILEFULLNAME(src),
                destinationHeader.c_str(), destPath.c_str(),
                destParentPath.c_str());
     File destParent = gfs->open(destParentPath, "r");
@@ -1254,20 +1355,21 @@ void ESPWebDAVCore::handleCopy(ResourceType resource, File& src)
     if (src.isDirectory())
     {
         DBG_PRINTF("Source is directory\n");
-        if (destParent.isFile())
+        if (ISFILE(destParent))
         {
             DBG_PRINTF("'%s' is not a directory\n", destParentPath.c_str());
             return handleIssue(409, "Conflict");
         }
 
-        if (!dirAction(src.fullName(), depth == DEPTH_ALL, [this, destParentPath](int depth, const String & parent, Dir & source)->bool
+        if (!dirAction(FILEFULLNAME(src), depth == DEPTH_ALL, [this, destParentPath](int depth, const String & parent, Dir & source)->bool
     {
         (void)depth;
             (void)parent;
-            String destNameX = destParentPath + '/' + source.fileName();
+            String destNameX = destParentPath + '/';
+            destNameX += FILENAME(source);
             stripName(destNameX);
-            DBG_PRINTF("COPY: '%s' -> '%s'\n", source.fileName().c_str(), destNameX.c_str());
-            return copyFile(gfs->open(source.fileName(), "r"), destNameX);
+            DBG_PRINTF("COPY: '%s' -> '%s'\n", FILENAME(source), destNameX.c_str());
+            return copyFile(gfs->open(FILENAME(source), "r"), destNameX);
         }))
         {
             return; // handleIssue already called by failed copyFile() handleIssue(409, "Conflict");
