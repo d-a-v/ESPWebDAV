@@ -1125,7 +1125,8 @@ void ESPWebDAVCore::handleMove(ResourceType resource, File& src)
     if ((code = allowed(uri)) != 200 || (code = allowed(dest)) != 200)
         return handleIssue(code, "Locked");
 
-    File destFile = gfs->open(dest, "r");
+    File destFile;
+    if (gfs->exists(dest) || (dest=="/")) destFile = gfs->open(dest, "r");
     if (destFile && !ISFILE(destFile))
     {
         dest += '/';
