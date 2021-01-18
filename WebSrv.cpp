@@ -99,7 +99,7 @@ void ESPWebDAV::handleClient()
             // take it over
             locClient = server->available();
             m_persistent_timer_ms = millis();
-            DBG_PRINTF("NEW CLIENT-------------------------------------------------------\n");
+            DBG_PRINT("NEW CLIENT-------------------------------------------------------");
         }
     }
 
