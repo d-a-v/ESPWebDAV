@@ -44,7 +44,16 @@
 #include <WiFi.h>
 #include "crc32.h"
 #include "PolledTimeout.h"
-#define FILENAME(f) f.name()
+const char * FileName(const char * path) {
+    String name = path;
+    if (name=="/")return path;
+    //path should not end by / if yes need to add a sanity check
+    int p = name.lastIndexOf("/");
+    if (p==-1) return path;
+    return  &path[p+1];
+}
+
+#define FILENAME(f) FileName(f.name())
 #define FILEFULLNAME(f) f.name()
 #define FILESIZE(f) f.size()
 #define FILETIME(f) f.getLastWrite()
