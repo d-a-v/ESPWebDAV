@@ -42,8 +42,8 @@
 #endif //ARDUINO_ARCH_ESP8266
 #if defined(ARDUINO_ARCH_ESP32)
 #include <WiFi.h>
-#include "crc32.h"
-#include "PolledTimeout.h"
+#include "crc32_esp32.h"
+#include "PolledTimeout_esp32.h"
 const char * FileName(const char * path) {
     String name = path;
     if (name=="/")return path;
