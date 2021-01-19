@@ -346,7 +346,7 @@ bool ESPWebDAVCore::dirAction(const String& path,
                               bool callAfter,
                               int depth)
 {
-    //DBG_PRINT("diraction: scanning dir '%s'", path.c_str());
+    DBG_PRINT("diraction: scanning dir '%s'", path.c_str());
 #if defined(ARDUINO_ARCH_ESP8266)
     Dir entry = gfs->openDir(path);
     while (entry.next()) 
@@ -359,14 +359,14 @@ bool ESPWebDAVCore::dirAction(const String& path,
         {
         if (!entry.isDirectory())
         {
-            //DBG_PRINT("diraction: %s/%s (%d B): ", path.c_str(), FILENAME(entry), (int)entry.fileSize());
+            DBG_PRINT("diraction: %s/%s (%d B): ", path.c_str(), FILENAME(entry), (int)entry.fileSize());
             if (cb(depth, path, entry))
             {
-                //DBG_PRINT("(file-OK)");
+                DBG_PRINT("(file-OK)");
             }
             else
             {
-                //DBG_PRINT("(file-abort)");
+                DBG_PRINT("(file-abort)");
                 return false;
             }
         }
@@ -388,16 +388,16 @@ bool ESPWebDAVCore::dirAction(const String& path,
             {
             if (entry.isDirectory())
             {
-                //DBG_PRINT("diraction: -------- %s/%s/", path.c_str(), FILENAME(entry));
+                DBG_PRINT("diraction: -------- %s/%s/", path.c_str(), FILENAME(entry));
                 if ((callAfter || cb(depth, path, entry))
                         && dirAction(path + '/' + FILENAME(entry), recursive, cb, callAfter, depth + 1)
                         && (!callAfter || cb(depth, path, entry)))
                 {
-                    //DBG_PRINT("(dir-OK)");
+                    DBG_PRINT("(dir-OK)");
                 }
                 else
                 {
-                    //DBG_PRINT("(dir-abort)");
+                    DBG_PRINT("(dir-abort)");
                     return false;
                 }
             }
@@ -731,13 +731,8 @@ void ESPWebDAVCore::handleProp(ResourceType resource, File& file)
     else
     {
         DBG_PRINT("----- PROP DIR '%s':", uri.c_str());
-        ////XXX FIXME DEPTH=oo must walk the tree
+        sendPropResponse(true, uri ,0, time(nullptr), 0);
 
-        if (uri.length() == 0 || (uri.length() == 1 && uri[0] == '/'))
-        {
-            ///XXX fixme: more generic way to list virtual file list
-            sendPropResponse(false, PROC, 1024, time(nullptr), 0);
-        }
 #if defined(ARDUINO_ARCH_ESP32)
         File root = gfs->open(uri);
         File entry = root.openNextFile();
@@ -755,6 +750,7 @@ void ESPWebDAVCore::handleProp(ResourceType resource, File& file)
             path += '/';
             path += FILENAME(entry);
             stripSlashes(path);
+            DBG_PRINT("Path: %s", path.c_str());
             sendPropResponse(entry.isDirectory(), path.c_str(), FILESIZE(entry), FILETIME(entry), FILECREATIONTIME(entry));
 #if defined(ARDUINO_ARCH_ESP32)
             entry = root.openNextFile();
@@ -1144,7 +1140,7 @@ void ESPWebDAVCore::handleMove(ResourceType resource, File& src)
     stripHost(dest);
     stripSlashes(dest);
     stripName(dest);
-    DBG_PRINT("Move destination: %s", dest);
+    DBG_PRINT("Move destination: %s", dest.c_str());
 
     int code;
     if ((code = allowed(uri)) != 200 || (code = allowed(dest)) != 200)
@@ -1464,8 +1460,8 @@ bool ESPWebDAVCore::parseRequest(const String& givenMethod,
     DBG_PRINT("############################################");
     DBG_PRINT(">>>>>>>>>> RECV");
 
-    DBG_PRINT("method: %s",method);
-    DBG_PRINT(" url: %s",uri);
+    DBG_PRINT("method: %s",method.c_str());
+    DBG_PRINT(" url: %s",uri.c_str());
 
     // parse and finish all headers
     String headerName;
@@ -1575,21 +1571,21 @@ void ESPWebDAVCore::send(const String& code, const char* content_type, const Str
 
     client->write(header.c_str(), header.length());
 
-    DBG_PRINT(">>>>>>>>>> SENT");
-    DBG_PRINT("---- header: \n%s", header.c_str());
+    //DBG_PRINT(">>>>>>>>>> SENT");
+    //DBG_PRINT("---- header: \n%s", header.c_str());
 
     if (content.length())
     {
         sendContent(content);
 #if DBG_WEBDAV
-        DBG_PRINT("---- content (%d bytes):", (int)content.length());
+        DBG_PRINT("send content (%d bytes):", (int)content.length());
         for (size_t i = 0; i < DEBUG_LEN && i < content.length(); i++)
             DBG_PRINTSHORT("%c", content[i] < 32 || content[i] > 127 ? '.' : content[i]);
         if (content.length() > DEBUG_LEN) DBG_PRINTSHORT("...");
         DBG_PRINTSHORT("\n");
 #endif
     }
-    DBG_PRINT("<<<<<<<<<< SENT");
+    //DBG_PRINT("<<<<<<<<<< SENT");
 }
 
 

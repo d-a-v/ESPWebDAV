@@ -8,10 +8,18 @@ ESP8266WebServer::HookFunction hookWebDAVForWebserver(const String& davRootDir, 
 {
     return [&dav, davRootDir](const String & method, const String & url, WiFiClient * client, ESP8266WebServer::ContentTypeFunction contentType)
     {
-        return
-            url.indexOf(davRootDir) != 0 ? ESP8266WebServer::CLIENT_REQUEST_CAN_CONTINUE :
-            dav.parseRequest(method, url, client, contentType) ? ESP8266WebServer::CLIENT_REQUEST_IS_HANDLED :
-            ESP8266WebServer::CLIENT_MUST_STOP;
+        if (url.indexOf(davRootDir) != 0) {
+            DBG_PRINT ("CLIENT_REQUEST_CAN_CONTINUE, %s is not seen in %s", davRootDir.c_str(), url.c_str());
+            return ESP8266WebServer::CLIENT_REQUEST_CAN_CONTINUE;
+        } else {
+            if (dav.parseRequest(method, url, client, contentType)){
+                DBG_PRINT ("CLIENT_REQUEST_IS_HANDLED");
+                return ESP8266WebServer::CLIENT_REQUEST_IS_HANDLED;
+            } else {
+                DBG_PRINT ("CLIENT_MUST_STOP");
+                return ESP8266WebServer::CLIENT_MUST_STOP;
+            }
+        }
     };
 }
 #endif //ARDUINO_ARCH_ESP8266
@@ -20,10 +28,18 @@ WebServer::HookFunction hookWebDAVForWebserver(const String& davRootDir, ESPWebD
 {
     return [&dav, davRootDir](const String & method, const String & url, WiFiClient * client, WebServer::ContentTypeFunction contentType)
     {
-        return
-            url.indexOf(davRootDir) != 0 ? CLIENT_REQUEST_CAN_CONTINUE :
-            dav.parseRequest(method, url, client, contentType) ? CLIENT_REQUEST_IS_HANDLED :
-            CLIENT_MUST_STOP;
+        if (url.indexOf(davRootDir) != 0) {
+            DBG_PRINT ("CLIENT_REQUEST_CAN_CONTINUE, %s is not seen in %s", davRootDir.c_str(), url.c_str());
+            return CLIENT_REQUEST_CAN_CONTINUE;
+        } else {
+            if (dav.parseRequest(method, url, client, contentType)){
+                DBG_PRINT ("CLIENT_REQUEST_IS_HANDLED");
+                return CLIENT_REQUEST_IS_HANDLED;
+            } else {
+                DBG_PRINT ("CLIENT_MUST_STOP");
+                return CLIENT_MUST_STOP;
+            }
+        }
     };
 }
 #endif //ARDUINO_ARCH_ESP32
