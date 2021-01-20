@@ -53,7 +53,8 @@
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <FS.h>
-#include <SPIFFS.h>
+//#include <SPIFFS.h>
+#include <LITTLEFS.h>
 #include <WebDav4WebServer.h>
 
 #if !WEBSERVER_HAS_HOOK
@@ -67,10 +68,9 @@
 #define STAPSK "psk"
 #endif
 
-FS& gfs = SPIFFS;
-//this because FS do not have these functions
-uint64_t TotalBytes(){return SPIFFS.totalBytes();}
-uint64_t UsedBytes(){return SPIFFS.usedBytes();}
+FS& gfs = LITTLEFS;
+#define FILESYSTEM LITTLEFS
+//#define FILESYSTEM SPIFFS
 
 WebServer server(80);
 
@@ -101,8 +101,8 @@ void setup()
 
     MDNS.begin(HOSTNAME);
 
-    SPIFFS.begin();
-    SPIFFS.mkdir("/dav");
+    FILESYSTEM.begin();
+    FILESYSTEM.mkdir("/dav");
     dav.begin(&gfs);
     dav.setTransferStatusCallback([](const char* name, int percent, bool receive)
     {
@@ -117,7 +117,7 @@ void setup()
 void help()
 {
     Serial.printf("interactive: F/ormat D/ir C/reateFile\n");
-    Serial.printf("Heap stats: free heap: %u\n",
+    Serial.printf("Free heap: %u\n",
                   ESP.getHeapSize());
 }
 
@@ -132,7 +132,7 @@ void loop()
         if (c == 'F')
         {
             Serial.println("formatting...");
-            if (SPIFFS.format())
+            if (FILESYSTEM.format())
                 Serial.println("Success");
             else
                 Serial.println("Failure");

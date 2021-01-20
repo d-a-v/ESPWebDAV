@@ -51,7 +51,8 @@
 
 #include <WiFi.h>
 #include <ESPmDNS.h>
-#include <SPIFFS.h>
+//#include <SPIFFS.h>
+#include <LITTLEFS.h>
 #include <ESPWebDAV.h>
 
 #define HOSTNAME    "ESPWebDAV"
@@ -61,11 +62,9 @@
 #define STAPSK "psk"
 #endif
 
-FS& gfs = SPIFFS;
-
-//this because FS do not have these functions
-uint64_t TotalBytes(){return SPIFFS.totalBytes();}
-uint64_t UsedBytes(){return SPIFFS.usedBytes();}
+FS& gfs = LITTLEFS;
+#define FILESYSTEM LITTLEFS
+//#define FILESYSTEM SPIFFS
 
 //WiFiServerSecure tcp(443);
 WiFiServer tcp(80);
@@ -97,7 +96,7 @@ void setup()
 
     MDNS.begin(HOSTNAME);
 
-    SPIFFS.begin();
+    FILESYSTEM.begin();
     tcp.begin();
     dav.begin(&tcp, &gfs);
     dav.setTransferStatusCallback([](const char* name, int percent, bool receive)
@@ -127,7 +126,7 @@ void loop()
         if (c == 'F')
         {
             Serial.println("formatting...");
-            if (SPIFFS.format())
+            if (FILESYSTEM.format())
                 Serial.println("Success");
             else
                 Serial.println("Failure");

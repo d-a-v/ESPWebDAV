@@ -42,8 +42,8 @@
 #endif //ARDUINO_ARCH_ESP8266
 #if defined(ARDUINO_ARCH_ESP32)
 #include <WiFi.h>
-#include "crc32_esp32.h"
 #include "PolledTimeout_esp32.h"
+#include <rom/miniz.h>
 const char * FileName(const char * path) {
     String name = path;
     if (name=="/")return path;
@@ -52,7 +52,7 @@ const char * FileName(const char * path) {
     if (p==-1) return path;
     return  &path[p+1];
 }
-
+#define crc32(a, len) mz_crc32(0,(const unsigned char *)a, len)
 #define FILENAME(f) FileName(f.name())
 #define FILEFULLNAME(f) f.name()
 #define FILESIZE(f) f.size()
@@ -60,30 +60,19 @@ const char * FileName(const char * path) {
 #define GETCREATIONTIME(f) f.getLastWrite()
 #define FILECREATIONTIME(f) f.getLastWrite()
 #define ISFILE(f) !f.isDirectory()
-extern uint64_t TotalBytes();
-extern uint64_t UsedBytes();
+//in esp32 totalbytes and usedbytes are not part of FS class 
+//so need to call an helper to address directly SPIFFS/LITTLEFS/SD/etc...
+//but due to https://support.microsoft.com/en-us/topic/webdav-mapped-drive-reports-incorrect-drive-capacity-fa101657-7448-1ce6-5999-5bcc59d6a8bd
+//this is not used / working
+//so let just send 0 but keep helper as comment if in futur it is working
+//extern uint64_t TotalBytes();
+//extern uint64_t UsedBytes();
+#define TotalBytes() 0
+#define UsedBytes() 0
 #endif //ARDUINO_ARCH_ESP32
 
 #include <time.h>
 #include <ESPWebDAV.h>
-#if defined(ARDUINO_ARCH_ESP8266)
-#if DBG_WEBDAV
-const char * pathToFileName(const char * path)
-{
-    size_t i = 0;
-    size_t pos = 0;
-    char * p = (char *)path;
-    while(*p) {
-        i++;
-        if(*p == '/' || *p == '\\') {
-            pos = i;
-        }
-        p++;
-    }
-    return path+pos;
-}
-#endif //DBG_WEBDAV
-#endif //ARDUINO_ARCH_ESP8266
 
 // define cal constants
 const char *months[]  = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};

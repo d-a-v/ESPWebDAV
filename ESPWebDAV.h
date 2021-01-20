@@ -59,7 +59,7 @@
 #define DBG_WEBDAV_PORT Serial
 #endif
 #if defined(ARDUINO_ARCH_ESP8266)
-extern const char * pathToFileName(const char * path);
+#define pathToFileName(p) p
 #endif //ARDUINO_ARCH_ESP8266
 #define DBG_PRINT(format, ...) {DBG_WEBDAV_PORT.printf("[%s:%u] %s(): " format "\r\n", pathToFileName(__FILE__), __LINE__, __FUNCTION__, ##__VA_ARGS__);}
 #define DBG_PRINTSHORT(...)     { DBG_WEBDAV_PORT.printf(__VA_ARGS__); }
