@@ -349,7 +349,7 @@ bool ESPWebDAVCore::dirAction(const String& path,
         {
         if (!entry.isDirectory())
         {
-            DBG_PRINT("diraction: %s/%s (%d B): ", path.c_str(), FILENAME(entry), (int)entry.fileSize());
+            DBG_PRINT("diraction: %s/%s (%d B): ", path.c_str(), FILENAME(entry),  (int)FILESIZE(entry));
             if (cb(depth, path, entry))
             {
                 DBG_PRINT("(file-OK)");
