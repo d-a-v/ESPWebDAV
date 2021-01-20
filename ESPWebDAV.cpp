@@ -52,7 +52,7 @@ const char * FileName(const char * path) {
     if (p==-1) return path;
     return  &path[p+1];
 }
-#define crc32(a, len) mz_crc32(0,(const unsigned char *)a, len)
+#define crc32(a, len) mz_crc32( 0xffffffff,(const unsigned char *)a, len)
 #define FILENAME(f) FileName(f.name())
 #define FILEFULLNAME(f) f.name()
 #define FILESIZE(f) f.size()
